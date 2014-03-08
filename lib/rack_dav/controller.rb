@@ -91,15 +91,7 @@ module RackDAV
     def copy
       raise NotFound if not resource.exist?
 
-      dest_uri = URI.parse(env['HTTP_DESTINATION'])
-      destination = url_unescape(dest_uri.path)
-
-      raise BadGateway if dest_uri.host and dest_uri.host != request.host
-      raise Forbidden if destination == resource.path
-
-      dest = resource_class.new(destination, @request, @response, @options)
-      dest = dest.child(resource.name) if dest.collection?
-
+      dest = destination_resource()
       dest_existed = dest.exist?
 
       copy_recursive(resource, dest, depth, errors = [])
@@ -118,15 +110,7 @@ module RackDAV
     def move
       raise NotFound if not resource.exist?
 
-      dest_uri = URI.parse(env['HTTP_DESTINATION'])
-      destination = url_unescape(dest_uri.path)
-
-      raise BadGateway if dest_uri.host and dest_uri.host != request.host
-      raise Forbidden if destination == resource.path
-
-      dest = resource_class.new(destination, @request, @response, @options)
-      dest = dest.child(resource.name) if dest.collection?
-
+      dest = destination_resource()
       dest_existed = dest.exist?
 
       raise Conflict if depth <= 1
@@ -158,9 +142,9 @@ module RackDAV
 
       multistatus do |xml|
         for resource in find_resources
-          resource.path.gsub!(/\/\//, '/')
+          path = resource.path.gsub(/\/\//, '/')
           xml.response do
-            xml.href "http://#{host}#{url_escape resource.path}"
+            xml.href "http://#{host}#{root}#{url_escape path}"
             propstats xml, get_properties(resource, names)
           end
         end
@@ -176,7 +160,7 @@ module RackDAV
       multistatus do |xml|
         for resource in find_resources
           xml.response do
-            xml.href "http://#{host}#{resource.path}"
+            xml.href "http://#{host}#{root}#{resource.path}"
             propstats xml, set_properties(resource, prop_set)
           end
         end
@@ -220,6 +204,13 @@ module RackDAV
         env['HTTP_HOST']
       end
 
+      def root
+        if @root.nil?
+          @root = env['SCRIPT_NAME'].sub(/\/*$/, '')
+        end
+        @root
+      end
+
       def resource_class
         @options[:resource_class]
       end
@@ -245,6 +236,18 @@ module RackDAV
         else
           [resource] + resource.descendants
         end
+      end
+
+      def destination_resource
+        dest_uri = URI.parse(env['HTTP_DESTINATION'])
+        destination = url_unescape(dest_uri.path).sub(/^#{root}/, '')
+
+        raise BadGateway if dest_uri.host and dest_uri.host != request.host
+        raise Forbidden if destination == resource.path
+
+        dest = resource_class.new(destination, @request, @response, @options)
+        dest = dest.child(resource.name) if dest.collection?
+        dest
       end
 
       def delete_recursive(res, errors)
