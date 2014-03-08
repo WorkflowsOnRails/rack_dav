@@ -98,10 +98,12 @@ module RackDAV
 
       if errors.empty?
         response.status = dest_existed ? NoContent : Created
-      else
+      elsif resource.collection?
         multistatus do |xml|
           response_errors(xml, errors)
         end
+      else
+        response.status = errors[0][1]
       end
     rescue URI::InvalidURIError => e
       raise BadRequest.new(e.message)
@@ -120,10 +122,12 @@ module RackDAV
 
       if errors.empty?
         response.status = dest_existed ? NoContent : Created
-      else
+      elsif resource.collection?
         multistatus do |xml|
           response_errors(xml, errors)
         end
+      else
+        response.status = errors[0][1]
       end
     rescue URI::InvalidURIError => e
       raise BadRequest.new(e.message)
